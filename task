@@ -150,5 +150,8 @@ update)
 help)
   usage
 ;;
+*)
+  usage
+;;
 
 esac
