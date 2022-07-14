@@ -1,0 +1,154 @@
+#!/bin/bash
+
+baseurl="http://127.0.0.1:1234/"
+
+#alias to jq lib for json parsing
+jq="./jq"
+space="    "
+
+# Show usage
+function usage() {
+  echo "A simple program to test restful APIs."
+  echo ""
+  echo "USAGE: "
+  echo "task list   --  List out all the tasks"
+  echo "task list <taskid>    --  List out the task with the specific taskid"
+  echo "task list --expiring-today    --  List out the tasks expired today"
+  echo "tasks add <taskname> <date>    --  Add a new task name and its due date"
+  echo "task update <taskid>  <taskname> <date>    --  Update the specific task with taskname and due date"
+  echo "task delete <taskid>     --  Delete the specific task "
+  echo " "
+  echo "<taskname> should be less than 80 characters, <date> should be in formant dd/mm/yyyy"
+}
+
+
+if [ $# == 0 ]; then
+  usage
+fi
+
+case $1 in
+list)
+  # task list
+  if [ $# == 1 ]; then
+    restfulurl=$baseurl"tasks"
+    resp=`curl -s -X GET $restfulurl`
+    #echo $resp
+
+    if [[ "$resp" =~ .*"date".* ]]; then
+      group=`echo $resp | $jq  '.Tasks[] | [.id,.date,.task] | @csv'`
+      echo "    ID           Date                          Task"
+      for((i=0; i<${#group[@]}; i++)); do
+      # echo "${group[$i]}"
+        line=`echo "${group[$i]//,/$space}"`
+        line=`echo "${line//'\'/$space}"`
+        line=`echo "${line//'"'/$space}"`
+        echo "$line"
+      done
+    else
+      echo $resp
+    fi
+
+   # task list --expiring-today
+   elif [ $# == 2 ]; then
+      if [ $2 == "--expiring-today" ]; then
+        today=`date +'%d/%m/%Y'`
+        echo $today
+
+        req="curl -s -X GET "$baseurl"tasks?date="$today
+        resp=`$req`
+        #echo $resp
+
+        # record found for expiring today
+        if [[ "$resp" =~ .*"date".* ]]; then
+          group=`echo $resp | $jq  '.Tasks[] | [.id,.date,.task] | @csv'`
+          echo "    ID           Date                          Task"
+          for((i=0; i<${#group[@]}; i++)); do
+            # echo "${group[$i]}"
+            line=`echo "${group[$i]//,/$space}"`
+            line=`echo "${line//'\'/$space}"`
+            line=`echo "${line//'"'/$space}"`
+            echo "$line"
+          done
+        # record not found for expiring today
+        else
+          echo $resp
+        fi
+
+      # task list <id>
+      elif [[ $2 =~ ^-?[0-9]+$ ]]; then
+
+        restfulurl=$baseurl"tasks/"$2
+        resp=`curl -s -X GET $restfulurl`
+        #echo $resp
+
+        # record found for task list <id>
+        if [[ "$resp" =~ .*"date".* ]]; then
+          group=`echo $resp | $jq  '.Tasks[] | [.id,.date,.task] | @csv'`
+          echo "    ID           Date                          Task"
+          for((i=0; i<${#group[@]}; i++)); do
+            # echo "${group[$i]}"
+            line=`echo "${group[$i]//,/$space}"`
+            line=`echo "${line//'\'/$space}"`
+            line=`echo "${line//'"'/$space}"`
+            echo "$line"
+         done
+         # record not found for task list <id>
+         else
+           echo $resp
+         fi
+      else
+        usage
+      fi
+    else
+      usage
+  fi
+;;
+
+add)
+  # task add <taskname> <date>
+  if [ $# != 3 ]; then
+     usage
+     exit
+  fi
+  content_type=$'\'Content-Type: application/json\''
+  postdata="'{\"task\":\"$2\",\"date\":\"$3\"}'"
+  restfulurl=$baseurl"tasks"
+  # echo $restfulurl
+
+  resp="curl -s -X POST $restfulurl -H 'Content-Type: application/json'  -d $postdata"
+  eval $resp
+;;
+
+
+delete)
+    # task delete <taskid>
+  if [ $# != 2 ]; then
+     usage
+     exit
+  fi
+   request="curl -s -X DELETE "$baseurl"tasks/""$2"
+   eval $request
+
+;;
+
+update)
+  #task update <taskid> <taskname> <date>
+  if [ $# != 4 ]; then
+     usage
+     exit
+  fi
+  content_type=$'\'Content-Type: application/json\''
+  postdata="'{\"task\":\"$3\",\"date\":\"$4\"}'"
+
+  restfulurl=$baseurl"tasks/""$2"
+  resp="curl -s -X PUT $restfulurl -H 'Content-Type: application/json'  -d $postdata"
+  #echo $resp
+  eval $resp
+
+;;
+
+help)
+  usage
+;;
+
+esac
